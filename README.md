@@ -40,6 +40,18 @@ We will keep the first version small:
 - MongoDB Atlas Vector Search
 - Streamlit, at least locally for the demo
 
+## Current Cloud Setup
+
+The shared Google Cloud project is `smartstudy-h505`.
+
+The upload bucket is:
+
+```text
+gs://smartstudy-h505-pdfs/
+```
+
+Setup notes and smoke-test commands are in `docs/cloud_setup.md`.
+
 ## Environment Variables
 
 Copy `.env.example` to `.env` locally and fill in real values.
