@@ -86,6 +86,8 @@ pip install -r requirements.txt
 
 `docs/mongodb_vector_index.json` is the draft Atlas Vector Search index. We may need to adjust it after we choose the exact embedding model.
 
+Atlas setup notes are in `docs/atlas_setup.md`.
+
 ## Team Split
 
 - Cloud: GCP project, bucket, APIs, Cloud Function deployment.
