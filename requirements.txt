@@ -1,0 +1,5 @@
+google-cloud-aiplatform
+langchain-text-splitters
+pymongo[srv]
+pypdf
+python-dotenv

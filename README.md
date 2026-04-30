@@ -88,6 +88,16 @@ pip install -r requirements.txt
 
 Atlas setup notes are in `docs/atlas_setup.md`.
 
+## First Ingestion Test
+
+Before deploying a Cloud Function, we test the core ingestion locally:
+
+```text
+PDF -> chunks -> embeddings -> MongoDB Atlas
+```
+
+Instructions are in `docs/local_ingestion.md`.
+
 ## Team Split
 
 - Cloud: GCP project, bucket, APIs, Cloud Function deployment.
