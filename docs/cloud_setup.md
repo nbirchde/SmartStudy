@@ -34,3 +34,4 @@ rm smoke-test.txt
 
 Expected result: the file appears in the bucket listing before it is removed.
 
+Status: passed on 2026-04-30.
