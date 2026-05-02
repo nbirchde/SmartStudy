@@ -1,13 +1,9 @@
-langchain
+functions-framework>=3.0.0
 langchain-core
 langchain-text-splitters
 langchain-google-vertexai
 langchain-google-genai
 langchain-mongodb
-google-cloud-aiplatform
 google-cloud-storage
 pymongo[srv]
 pypdf
-streamlit
-python-dotenv
-functions-framework
