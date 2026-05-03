@@ -2,6 +2,7 @@
 .venv/
 __pycache__/
 *.pyc
+.git/
 .pytest_cache/
 .streamlit/secrets.toml
 service-account*.json
@@ -9,5 +10,5 @@ service-account*.json
 docs/*.aux
 docs/*.fdb_latexmk
 docs/*.fls
+docs/*.log
 docs/*.out
-docs/*.synctex.gz
