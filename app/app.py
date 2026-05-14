@@ -820,6 +820,9 @@ label, p, span, h1, h2, h3, h4, h5, h6 {
   min-height: 2.4rem !important;
   padding: 0 !important;
   justify-content: center !important;
+  background: var(--app-bg) !important;
+  color: var(--text-strong) !important;
+  border-color: var(--border) !important;
 }
 div[data-testid="stChatMessage"],
 div[data-testid="stChatMessage"] *,
