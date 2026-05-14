@@ -8,6 +8,14 @@
     },
     {
       "type": "filter",
+      "path": "folder_id"
+    },
+    {
+      "type": "filter",
+      "path": "folder_path"
+    },
+    {
+      "type": "filter",
       "path": "source_file"
     },
     {
@@ -16,4 +24,3 @@
     }
   ]
 }
-

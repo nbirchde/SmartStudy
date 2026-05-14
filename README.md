@@ -1,21 +1,23 @@
 # SmartStudy Cloud Agent
 
-SmartStudy is our INFO-H505 cloud project. A student uploads lecture PDFs, the system indexes the content, and a small tutor app answers questions using those notes.
+SmartStudy is our INFO-H505 cloud project. A student creates a folder, uploads lecture PDFs, the system indexes the content, and a small tutor app answers questions using only the notes from that folder.
 
 The app is already deployed here:
 
 ```text
-https://smartstudy-app-rmbl7tljsq-ew.a.run.app
+https://smartstudy-app-376906403882.europe-west1.run.app/?folder_id=cb1b0a0c89744b3a8af605db9c3c58c1&folder_path=nicholas
 ```
 
 ## What it does
 
-1. The student uploads a lecture PDF through the Streamlit app.
-2. The app stores the PDF in Google Cloud Storage.
-3. A Cloud Function runs automatically when the PDF arrives in the bucket.
-4. The function extracts text, splits it into chunks, creates Vertex AI embeddings, and stores the chunks in MongoDB Atlas Vector Search.
-5. The chat app retrieves the closest chunks for a question and sends them to Gemini 2.5 Flash.
-6. Gemini answers as a formal academic tutor and cites the source file/page when the context supports it.
+1. The student creates or opens a folder in the Streamlit app.
+2. The student uploads lecture PDFs into that folder.
+3. The app stores each PDF in Google Cloud Storage under a folder-scoped path.
+4. A Cloud Function runs automatically when the PDF arrives in the bucket.
+5. The function extracts text, splits it into chunks, creates Vertex AI embeddings, and stores the chunks in MongoDB Atlas Vector Search with the folder metadata.
+6. The app stores workspace chat threads in MongoDB and keeps each chat's history separate.
+7. The tutor retrieves the closest chunks from the active folder only and sends the retrieved context plus the active chat history to Gemini 2.5 Flash.
+8. Gemini answers as a formal academic tutor and cites the source file/page when the context supports it.
 
 ## Main folders
 
@@ -38,11 +40,15 @@ Cloud Function:    ingest-pdf
 Cloud Run app:     smartstudy-app
 MongoDB database:  smartstudy
 MongoDB collection: lecture_chunks
+Chat collection:     workspace_chats
 Vector index:      lecture_vector_index
 Static egress IP:  104.155.37.123
+Retention:         7 days for folder PDFs and indexed chunks
 ```
 
 The deployed app and function both read `MONGODB_URI` from Google Secret Manager. Their outbound MongoDB traffic goes through the VPC connector and Cloud NAT, so Atlas only needs to allow the static GCP egress IP.
+
+Uploads are stored under `folders/{folder_id}/...`. The `folder_id` and `folder_path` are included in each MongoDB chunk and used as Atlas Vector Search filters, so the tutor retrieves notes from the active folder only. Chat threads are stored in `workspace_chats` with the same folder scope. This is folder compartmentalization, not login-based access control: anyone with a folder URL can use that folder workspace and see its chats.
 
 ## Local setup
 
@@ -67,6 +73,14 @@ If you run locally, MongoDB Atlas must allow your current IP address. The hosted
 
 ## Deploying the app
 
+Redeploy the Cloud Function first so new folder uploads are indexed with folder metadata:
+
+```bash
+GOOGLE_CLOUD_PROJECT=smartstudy-h505 \
+GCS_BUCKET_NAME=smartstudy-h505-pdfs \
+./scripts/deploy_function.sh
+```
+
 The Streamlit app is containerized with `Dockerfile`. To redeploy it from the repo root:
 
 ```bash
@@ -77,21 +91,27 @@ gcloud run deploy smartstudy-app \
   --allow-unauthenticated \
   --port=8080 \
   --service-account=376906403882-compute@developer.gserviceaccount.com \
-  --set-env-vars="GOOGLE_CLOUD_PROJECT=smartstudy-h505,GCP_LOCATION=europe-west1,GCS_BUCKET_NAME=smartstudy-h505-pdfs,MONGODB_DATABASE=smartstudy,MONGODB_COLLECTION=lecture_chunks,MONGODB_VECTOR_INDEX=lecture_vector_index,EMBEDDING_MODEL=text-embedding-005,GEMINI_MODEL=gemini-2.5-flash" \
+  --set-env-vars="GOOGLE_CLOUD_PROJECT=smartstudy-h505,GCP_LOCATION=europe-west1,GCS_BUCKET_NAME=smartstudy-h505-pdfs,MONGODB_DATABASE=smartstudy,MONGODB_COLLECTION=lecture_chunks,MONGODB_CHAT_COLLECTION=workspace_chats,MONGODB_VECTOR_INDEX=lecture_vector_index,EMBEDDING_MODEL=text-embedding-005,GEMINI_MODEL=gemini-2.5-flash,RETENTION_DAYS=7" \
   --set-secrets="MONGODB_URI=MONGODB_URI:latest" \
   --vpc-connector=smartstudy-vpc-conn \
   --vpc-egress=all-traffic
 ```
 
+The Atlas Vector Search index includes `folder_id` and `folder_path` as filter fields. The index definition is in `docs/mongodb_vector_index.json`.
+
+The bucket lifecycle rule for PDF cleanup is in `docs/gcs_lifecycle.json`. Apply it with:
+
+```bash
+gcloud storage buckets update gs://smartstudy-h505-pdfs \
+  --lifecycle-file=docs/gcs_lifecycle.json
+```
+
 ## Useful docs
 
 - `docs/team_notes.md`: short working notes for the team.
-- `docs/smartstudy_status_note.pdf`: simple professor-facing implementation note.
+- `docs/architecture.md`: current data flow and folder-scoping note.
+- `docs/smartstudy_status_note.pdf`: final project report PDF.
 
-## What is left
+## Submission status
 
-- Pick one Streamlit entry point. Right now `app/app.py` is the deployed one.
-- Improve the app when indexing fails or takes too long.
-- Show retrieved sources more clearly in the Cloud Run app.
-- Add user/session scoping. Right now uploads and retrieval share one bucket/collection, so users can query PDFs uploaded by other people.
-- Prepare the final report and demo around the rubric: automation, retrieval, architecture, tutor persona, and the web interface.
+The repo contains the Cloud Function, the Cloud Run Streamlit app, the LangChain retrieval code, the MongoDB Atlas Vector Search index definition, and the final PDF report required for the INFO-H505 submission.

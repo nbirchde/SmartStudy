@@ -1,6 +1,6 @@
 import os
 import tempfile
-from pathlib import Path
+from datetime import datetime, timedelta, timezone
 
 import functions_framework
 from cloudevents.http import CloudEvent
@@ -12,7 +12,9 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pymongo import MongoClient
 from pypdf import PdfReader
 
-# Cloud Function to ingest uploaded PDFs, extract text, create embeddings, and store them in MongoDB Atlas for retrieval by the tutor chain.
+FOLDER_ROOT = "folders"
+
+
 @functions_framework.cloud_event
 def ingest_pdf(cloud_event: CloudEvent) -> None:
     data = cloud_event.data
@@ -21,6 +23,11 @@ def ingest_pdf(cloud_event: CloudEvent) -> None:
 
     if not file_name.lower().endswith(".pdf"):
         print(f"Skipping non-PDF: {file_name}")
+        return
+
+    folder_info = _parse_folder_object(file_name)
+    if not folder_info:
+        print(f"Skipping PDF outside folder scope: {file_name}")
         return
 
     print(f"Ingesting gs://{bucket_name}/{file_name}")
@@ -32,6 +39,7 @@ def ingest_pdf(cloud_event: CloudEvent) -> None:
     database = os.environ.get("MONGODB_DATABASE", "smartstudy")
     collection_name = os.environ.get("MONGODB_COLLECTION", "lecture_chunks")
     index_name = os.environ.get("MONGODB_VECTOR_INDEX", "lecture_vector_index")
+    retention_days = int(os.environ.get("RETENTION_DAYS", "7"))
 
     blob = storage.Client().bucket(bucket_name).blob(file_name)
 
@@ -40,7 +48,18 @@ def ingest_pdf(cloud_event: CloudEvent) -> None:
         tmp_path = tmp.name
 
     try:
-        documents = _extract_documents(tmp_path, file_name)
+        now = datetime.now(timezone.utc)
+        expires_at = now + timedelta(days=retention_days)
+        documents = _extract_documents(
+            tmp_path,
+            gcs_file_name=file_name,
+            folder_id=folder_info["folder_id"],
+            folder_path=folder_info["folder_path"],
+            upload_id=folder_info["upload_id"],
+            source_file=folder_info["source_file"],
+            uploaded_at=now,
+            expires_at=expires_at,
+        )
         if not documents:
             print(f"No text found in {file_name}")
             return
@@ -53,11 +72,11 @@ def ingest_pdf(cloud_event: CloudEvent) -> None:
 
         mongo_client = MongoClient(mongo_uri)
         collection = mongo_client[database][collection_name]
+        _ensure_indexes(collection)
 
-        pdf_basename = Path(file_name).name
-        deleted = collection.delete_many({"source_file": pdf_basename})
+        deleted = collection.delete_many({"gcs_path": file_name})
         if deleted.deleted_count:
-            print(f"Removed {deleted.deleted_count} stale chunks for {pdf_basename}")
+            print(f"Removed {deleted.deleted_count} stale chunks for {file_name}")
 
         vector_store = MongoDBAtlasVectorSearch(
             collection=collection,
@@ -75,11 +94,46 @@ def ingest_pdf(cloud_event: CloudEvent) -> None:
     finally:
         os.unlink(tmp_path)
 
-# Helper function to extract text from PDF, split into chunks, and create Document objects with metadata for MongoDB storage.
-def _extract_documents(pdf_path: str, gcs_file_name: str) -> list[Document]:
+
+def _parse_folder_object(gcs_file_name: str) -> dict | None:
+    parts = gcs_file_name.split("/")
+    if len(parts) < 4 or parts[0] != FOLDER_ROOT:
+        return None
+
+    folder_id = parts[1]
+    folder_path = "/".join(parts[2:-1])
+    uploaded_name = parts[-1]
+    upload_id, separator, source_file = uploaded_name.partition("-")
+    if not separator or not folder_id or not folder_path or not source_file:
+        return None
+
+    return {
+        "folder_id": folder_id,
+        "folder_path": folder_path,
+        "upload_id": upload_id,
+        "source_file": source_file,
+    }
+
+
+def _ensure_indexes(collection) -> None:
+    collection.create_index("gcs_path")
+    collection.create_index("folder_id")
+    collection.create_index([("folder_id", 1), ("folder_path", 1)])
+    collection.create_index("expires_at", expireAfterSeconds=0)
+
+
+def _extract_documents(
+    pdf_path: str,
+    gcs_file_name: str,
+    folder_id: str,
+    folder_path: str,
+    upload_id: str,
+    source_file: str,
+    uploaded_at: datetime,
+    expires_at: datetime,
+) -> list[Document]:
     splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
     reader = PdfReader(pdf_path)
-    pdf_basename = Path(gcs_file_name).name
     docs = []
 
     for page_number, page in enumerate(reader.pages, start=1):
@@ -90,10 +144,15 @@ def _extract_documents(pdf_path: str, gcs_file_name: str) -> list[Document]:
             docs.append(Document(
                 page_content=chunk_text,
                 metadata={
-                    "source_file": pdf_basename,
+                    "folder_id": folder_id,
+                    "folder_path": folder_path,
+                    "upload_id": upload_id,
+                    "source_file": source_file,
                     "gcs_path": gcs_file_name,
                     "page": page_number,
                     "chunk": chunk_number,
+                    "uploaded_at": uploaded_at,
+                    "expires_at": expires_at,
                 },
             ))
 

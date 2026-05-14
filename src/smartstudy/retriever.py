@@ -2,7 +2,7 @@ from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_mongodb import MongoDBAtlasVectorSearch
 from pymongo import MongoClient
 
-# Build a retriever that fetches relevant lecture chunks from MongoDB Atlas based on the student's question.
+
 def build_retriever(
     mongo_uri: str,
     database: str,
@@ -12,6 +12,7 @@ def build_retriever(
     location: str,
     embedding_model: str,
     k: int = 5,
+    pre_filter: dict | None = None,
 ):
     embeddings = GoogleGenerativeAIEmbeddings(
         model=embedding_model,
@@ -30,4 +31,8 @@ def build_retriever(
         embedding_key="embedding",
     )
 
-    return vector_store.as_retriever(search_kwargs={"k": k})
+    search_kwargs = {"k": k}
+    if pre_filter:
+        search_kwargs["pre_filter"] = pre_filter
+
+    return vector_store.as_retriever(search_kwargs=search_kwargs)

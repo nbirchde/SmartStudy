@@ -5,7 +5,9 @@
 \usepackage[utf8]{inputenc}
 \usepackage{lmodern}
 \usepackage{hyperref}
-\usepackage{enumitem}
+\usepackage{tikz}
+
+\usetikzlibrary{arrows.meta, positioning}
 
 \hypersetup{
   colorlinks=true,
@@ -13,74 +15,126 @@
   urlcolor=blue
 }
 
-\setlist[itemize]{leftmargin=1.4em}
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{0.7em}
 
-\title{SmartStudy cloud implementation note}
-\author{INFO-H505 Cloud Computing project}
-\date{3 May 2026}
+\title{SmartStudy report}
+\author{
+Nicholas Birch de la Calle\\
+Gabriel Badan\\
+Louis David Duman\\[0.6em]
+\small INFO-H505 Cloud Computing\\
+\small Professor: Dimitris Sacharidis
+}
+\date{May 2026}
 
 \begin{document}
 \maketitle
 
 \section*{What we built}
 
-We built SmartStudy, a cloud-based tutor for lecture PDFs. A student uploads a PDF, the system indexes the document, and the web app answers questions using the uploaded notes as context.
+SmartStudy is a cloud-based tutor for lecture PDFs. A student creates a workspace, uploads PDFs into it, waits for the cloud pipeline to index the material, and then asks questions in the web app. The tutor answers from the uploaded notes for that workspace and cites the source file and page when the retrieved context supports the answer.
 
-The current version follows the architecture requested in the project brief:
+The implementation follows the main SmartStudy requirements from the INFO-H505 brief. PDF uploads are stored in Google Cloud Storage. A Python Cloud Function runs when a PDF is finalized in the bucket, extracts the text, splits it with LangChain, creates Vertex AI embeddings, and writes the chunks to MongoDB Atlas Vector Search. The Streamlit app runs on Cloud Run and uses a LangChain retrieval chain for the question-answering loop. Gemini 2.5 Flash generates the final tutor answer.
 
-\begin{itemize}
-  \item PDFs are uploaded to a Google Cloud Storage bucket.
-  \item A Python Cloud Function runs automatically when a new PDF is added to the bucket.
-  \item The function extracts text from the PDF, splits it into chunks, creates embeddings with Vertex AI, and stores the chunks in MongoDB Atlas Vector Search.
-  \item The Streamlit app retrieves the closest chunks for a student question.
-  \item Gemini 2.5 Flash writes an answer as a formal academic tutor, with source citations and a follow-up question.
-\end{itemize}
+The tutor prompt asks Gemini to behave as a formal academic tutor. It must stay grounded in the retrieved lecture context for lecture-specific claims, cite the source file and page, explain the answer clearly, and end with one follow-up question. For the advanced feature, we implemented the deployed web interface. We also store chat history in MongoDB, so each workspace can keep separate conversations instead of losing the chat after a page refresh.
 
-For the advanced feature, we chose a web interface. We deployed it on Cloud Run so the project can be tested from a browser without running the app locally.
+\section*{Architecture diagram}
 
-\section*{What works now}
+\begin{center}
+\begin{tikzpicture}[
+  box/.style={
+    draw,
+    rounded corners=2pt,
+    align=center,
+    minimum width=3.05cm,
+    minimum height=1.05cm,
+    font=\small
+  },
+  store/.style={
+    box,
+    fill=gray!8
+  },
+  cloud/.style={
+    box,
+    fill=blue!5
+  },
+  arrow/.style={
+    -{Latex[length=2.2mm]},
+    thick
+  }
+]
 
-The main pipeline now runs in the cloud. The Cloud Run app uploads PDFs to the bucket, the Cloud Function ingests them, and MongoDB Atlas stores the resulting chunks and vectors.
+\node[box] (student) at (0, 0) {Student\\browser};
+\node[cloud] (run) at (4.3, 0) {Cloud Run\\Streamlit app};
+\node[store] (gcs) at (8.6, 0) {Google Cloud\\Storage bucket};
+\node[cloud] (function) at (8.6, -2.1) {Cloud Function\\PDF ingestion};
+\node[store] (mongo) at (8.6, -4.2) {MongoDB Atlas\\Vector Search};
+\node[cloud] (gemini) at (4.3, -4.2) {Gemini 2.5 Flash\\tutor answer};
+\node[store] (chats) at (0, -2.1) {MongoDB Atlas\\chat history};
 
-The deployed resources are:
+\draw[arrow] (student) -- (run);
+\draw[arrow] (run) -- (gcs);
+\draw[arrow] (gcs) -- (function);
+\draw[arrow] (function) -- (mongo);
+\draw[arrow] (mongo) -- (gemini);
+\draw[arrow] (gemini) -- (run);
+\draw[arrow] (run) -- (chats);
+\draw[arrow] (run.south east) -- (mongo.north west);
 
-\begin{itemize}
-  \item GCP project: \texttt{smartstudy-h505}
-  \item Region: \texttt{europe-west1}
-  \item Upload bucket: \texttt{smartstudy-h505-pdfs}
-  \item Cloud Function: \texttt{ingest-pdf}
-  \item Cloud Run app: \texttt{smartstudy-app}
-  \item MongoDB collection: \texttt{smartstudy.lecture\_chunks}
-  \item Atlas Vector Search index: \texttt{lecture\_vector\_index}
-\end{itemize}
+\end{tikzpicture}
+\end{center}
 
-\section*{The network issue we hit}
+The top path is the ingestion flow: the app uploads a PDF to Cloud Storage, and the Cloud Function indexes it. The lower path is the chat flow: the app stores conversation history, retrieves the relevant chunks from Atlas Vector Search, and sends the context to Gemini.
+
+\section*{Data flow}
+
+The Cloud Run app is the entry point. It creates a generated \texttt{folder\_id}, keeps the visible workspace name as \texttt{folder\_path}, and uploads each PDF under a path such as:
+
+\begin{center}
+\texttt{folders/<folder\_id>/<folder\_path>/<upload\_id>-<file>.pdf}
+\end{center}
+
+When the object arrives in the bucket, the Cloud Function receives the GCS event. It ignores non-PDF files and PDFs outside the \texttt{folders/} prefix. For accepted files, it downloads the PDF, reads each page with \texttt{pypdf}, splits the extracted text into overlapping chunks, creates embeddings with Vertex AI, and inserts the chunks into MongoDB Atlas. Each chunk stores the source file, page number, GCS path, upload id, workspace id, workspace path, upload time, and expiry time.
+
+The chat path uses the same workspace metadata. When the student asks a question, the app builds a MongoDB Atlas Vector Search retriever with a filter on the active \texttt{folder\_id} and \texttt{folder\_path}. That filter is important: it keeps one workspace from retrieving PDFs uploaded into another workspace. The retrieved chunks, the recent chat history, and the student question are passed to Gemini 2.5 Flash through a LangChain prompt.
+
+Chat conversations are stored in a separate MongoDB collection. This gives the app conversation memory and lets a workspace keep multiple chat threads.
+
+The deployed GCP project is \texttt{smartstudy-h505}, in \texttt{europe-west1}. The upload bucket is \texttt{smartstudy-h505-pdfs}, the Cloud Function is \texttt{ingest-pdf}, and the Cloud Run service is \texttt{smartstudy-app}. MongoDB stores lecture chunks in \texttt{smartstudy.lecture\_chunks}, chat history in \texttt{smartstudy.workspace\_chats}, and vector search uses the \texttt{lecture\_vector\_index} index.
+
+\section*{Implementation summary}
+
+The lab version gave us the useful core idea: extract text, chunk it, embed it, store vectors in MongoDB Atlas, and use the retrieved chunks as context for an LLM. Moving that idea into the live cloud project required several changes.
+
+First, ingestion moved from a manual script to an event-driven Cloud Function. Uploading a PDF to GCS now triggers the full ingestion path automatically. This matches the project brief's automation requirement and makes the demo closer to a real study workflow: the student uploads notes in the app, and the backend indexes them without running a local command.
+
+Second, storage became workspace-aware. The earlier shape could store and retrieve notes, but it did not separate one user's material from another folder. The current version writes folder metadata into the GCS object path and into every MongoDB chunk. Retrieval uses the same metadata as a Vector Search filter, so the tutor only sees sources from the active workspace.
+
+Third, the app now runs as a deployed web interface on Cloud Run. The Streamlit app handles workspace creation, PDF upload, indexing status, chat creation, chat history, and source display. The demo does not require a local Python environment.
+
+Fourth, secrets and network access were adjusted for the live Google Cloud environment. The app and function read the MongoDB connection string from Secret Manager. Their outbound Atlas traffic goes through a VPC connector and Cloud NAT, so MongoDB Atlas can allow one static Google Cloud egress IP instead of opening the database to all IP addresses.
+
+Fifth, the tutor prompt was tightened around the grading rubric. Gemini is instructed to answer only from retrieved lecture notes for lecture-specific claims, cite file and page references, and end with one follow-up question that checks understanding.
+
+\section*{Reliability and cleanup}
 
 The first deployed function could not connect reliably to MongoDB Atlas. The PDF upload triggered the function, but the function failed when it tried to write to the database. The error appeared as an SSL handshake failure from the Atlas shard hosts.
 
-The quick workaround would have been to allow all IP addresses in Atlas. We did not keep that solution because it is too open. Instead, we gave the deployed Google Cloud services a fixed outbound route:
-
-\begin{itemize}
-  \item We reserved a static Google Cloud IP address: \texttt{104.155.37.123}.
-  \item We routed serverless traffic through a VPC connector and Cloud NAT.
-  \item We allowed only \texttt{104.155.37.123/32} in the MongoDB Atlas IP access list for the deployed pipeline.
-  \item We moved the MongoDB connection string into Google Secret Manager.
-\end{itemize}
+The quick workaround would have been to allow all IP addresses in Atlas. We did not keep that solution because it is too open. Instead, we gave the deployed Google Cloud services a fixed outbound route. We reserved the static Google Cloud IP address \texttt{104.155.37.123}, routed serverless traffic through a VPC connector and Cloud NAT, allowed only \texttt{104.155.37.123/32} in the MongoDB Atlas IP access list for the deployed pipeline, and moved the MongoDB connection string into Google Secret Manager.
 
 This means Atlas sees the deployed app and function as coming from one known Google Cloud IP. It is a better fit for the project than adding every teammate's home IP or opening the database to the internet.
 
-\section*{What is still left}
+Uploaded PDFs and indexed chunks are kept for seven days. Cloud Storage removes old PDF objects through a lifecycle rule, and MongoDB removes expired chunks through a TTL index on \texttt{expires\_at}. This is enough for the course demo and avoids keeping uploaded lecture files indefinitely.
 
-The main remaining work is polish. We still need to make indexing errors clearer, show retrieved sources better in the app, and decide whether to keep or merge the older Streamlit entry point in the repository.
+The workspace mechanism is folder compartmentalization, not full account-based access control. Anyone with a workspace URL can use that workspace and see its chats. For this project that is acceptable because the brief asks for a cloud folder workflow, not a login system.
 
-One limitation is that the upload bucket and vector collection are shared. At the moment, a student can ask questions over PDFs uploaded by other users because all chunks are stored in the same retrieval space. For a later version, we would separate uploads by user or session, for example with folder prefixes in the bucket and a matching metadata filter in MongoDB.
+\section*{Conclusion}
 
-We also need to prepare the final report and demo around the rubric: automatic ingestion, grounded retrieval, architecture, tutor behaviour, and the deployed web interface.
+SmartStudy now has the required cloud-native RAG flow: PDF upload to GCS, automatic Cloud Function ingestion, Vertex AI embeddings, MongoDB Atlas Vector Search, LangChain orchestration, and Gemini 2.5 Flash tutor answers. The deployed Streamlit interface is the main advanced feature, and MongoDB chat history adds conversation memory on top of it. The main live-cloud work was turning the lab logic into an automated, folder-scoped, deployed pipeline with Secret Manager and a fixed Atlas egress path.
 
-\section*{Short summary}
+\section*{Links}
 
-We now have the core SmartStudy flow running online: PDF upload, automatic ingestion, embeddings, vector search, and Gemini tutor answers. The main infrastructure issue was making MongoDB Atlas accept traffic from deployed Google Cloud services safely. We solved it with a static egress IP, Cloud NAT, and Secret Manager.
+The GitHub repository is \url{https://github.com/nbirchde/SmartStudy}. The deployed application is available at \href{https://smartstudy-app-376906403882.europe-west1.run.app/?folder_id=cb1b0a0c89744b3a8af605db9c3c58c1&folder_path=nicholas}{smartstudy-app-376906403882.europe-west1.run.app}.
 
 \end{document}

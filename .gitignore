@@ -3,6 +3,8 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+.claude/
+.streamlit/config.toml
 .streamlit/secrets.toml
 service-account*.json
 *.log
