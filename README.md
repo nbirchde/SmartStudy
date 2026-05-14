@@ -106,11 +106,9 @@ gcloud storage buckets update gs://smartstudy-h505-pdfs \
   --lifecycle-file=docs/gcs_lifecycle.json
 ```
 
-## Useful docs
+## Report
 
-- `docs/team_notes.md`: short working notes for the team.
-- `docs/architecture.md`: current data flow and folder-scoping note.
-- `docs/smartstudy_status_note.pdf`: final project report PDF.
+The final PDF report is in `docs/smartstudy_status_note.pdf`. A shorter architecture note is kept in `docs/architecture.md`.
 
 ## Submission status
 
