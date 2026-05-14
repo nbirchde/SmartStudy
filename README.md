@@ -5,7 +5,7 @@ SmartStudy is our INFO-H505 cloud project. A student creates a folder, uploads l
 The app is already deployed here:
 
 ```text
-https://smartstudy-app-376906403882.europe-west1.run.app/?folder_id=cb1b0a0c89744b3a8af605db9c3c58c1&folder_path=nicholas
+https://smartstudy-app-376906403882.europe-west1.run.app
 ```
 
 ## What it does
