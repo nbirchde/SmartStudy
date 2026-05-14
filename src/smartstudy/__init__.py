@@ -1,0 +1,2 @@
+"""SmartStudy shared application code."""
+
