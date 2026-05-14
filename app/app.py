@@ -821,8 +821,10 @@ label, p, span, h1, h2, h3, h4, h5, h6 {
   padding: 0 !important;
   justify-content: center !important;
 }
-div[data-testid="stChatMessage"] {
-  color: var(--text);
+div[data-testid="stChatMessage"],
+div[data-testid="stChatMessage"] *,
+div[data-testid="stChatInput"] {
+  color: var(--text) !important;
 }
 div[data-testid="stChatMessage"],
 div[data-testid="stChatInput"] {
