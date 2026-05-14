@@ -31,7 +31,7 @@ def build_retriever(
         embedding_key="embedding",
     )
 
-    search_kwargs = {"k": k}
+    search_kwargs: dict[str, object] = {"k": k}
     if pre_filter:
         search_kwargs["pre_filter"] = pre_filter
 
