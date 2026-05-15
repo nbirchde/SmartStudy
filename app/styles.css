@@ -267,7 +267,8 @@ section[data-testid="stSidebar"] div[data-testid="stForm"] button:disabled {
   font-size: 2.05rem;
   line-height: 1.08;
   font-weight: 580;
-  margin: 0;
+  margin: 0 !important;
+  padding: 0 !important;
   color: var(--text-strong);
 }
 .project-subtitle {
