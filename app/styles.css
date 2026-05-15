@@ -34,7 +34,6 @@ div[data-testid="stAppViewContainer"] .main .block-container {
   padding: 3.25rem 1rem 6rem;
 }
 
-div[data-testid="stToolbar"] { right: 1.2rem; }
 [data-testid="stMainMenu"] { display: none !important; }
 
 /*Alerts & tabs*/
@@ -376,8 +375,6 @@ section[data-testid="stSidebar"] div[data-testid="stForm"] button:disabled {
   color: var(--text-strong) !important;
   border-color: var(--border) !important;
 }
-
-.st-emotion-cache-1aplgmp { margin: 1rem; }
 
 /*Responsive*/
 @media (max-width: 900px) {
