@@ -188,7 +188,7 @@ section[data-testid="stSidebar"] div[data-testid="stForm"] button:disabled {
   color: var(--text-strong);
   padding: 0.78rem 0.85rem;
   font-weight: 620;
-  margin: 0.22rem 0 0.45rem;
+  margin-bottom: 0.4rem;
   width: 100%;
 }
 .rail-active .folder-mark { color: var(--accent); }
