@@ -244,9 +244,13 @@ section[data-testid="stSidebar"] div[data-testid="stForm"] button:disabled {
 
 .project-header {
   display: flex;
+  flex-direction: column;
+  margin: 1.85rem 0 1.65rem;
+}
+.project-title-row {
+  display: flex;
   align-items: center;
   gap: 1rem;
-  margin: 1.85rem 0 1.65rem;
 }
 .project-icon {
   width: 42px;

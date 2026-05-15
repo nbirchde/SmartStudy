@@ -493,11 +493,11 @@ def _render_header(project_title: str, pdf_count: int, chat_count: int) -> None:
     escaped_title = html.escape(project_title)
     st.markdown(
         f"""<div class="project-header">
-<div class="project-icon">{_folder_mark(opened=True)}</div>
-<div>
+<div class="project-title-row">
+  <div class="project-icon">{_folder_mark(opened=True)}</div>
   <h1 class="project-title">{escaped_title}</h1>
-  <div class="project-subtitle">{html.escape(st.session_state.folder_path)} · {pdf_count} sources · {chat_count} chats</div>
 </div>
+<div class="project-subtitle">{html.escape(st.session_state.folder_path)} · {pdf_count} sources · {chat_count} chats</div>
 </div>""",
         unsafe_allow_html=True,
     )
