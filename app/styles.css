@@ -171,13 +171,12 @@ section[data-testid="stSidebar"] div[data-testid="stForm"] button:disabled {
 .rail-title {
   font-size: 1.38rem;
   font-weight: 730;
-  margin: 0.2rem 0 1.6rem;
   color: var(--text-strong);
 }
 .rail-section {
   font-size: 0.9rem;
   font-weight: 680;
-  margin: 1.2rem 0 0.55rem;
+  margin: 0.5rem 0 0.7rem;
   color: var(--text);
 }
 .rail-active {
