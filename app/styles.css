@@ -109,7 +109,6 @@ section[data-testid="stSidebar"] {
   background: var(--surface) !important;
 }
 section[data-testid="stSidebar"] > div {
-  padding-top: 1.35rem;
   background: var(--surface) !important;
 }
 
